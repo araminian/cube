@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/araminian/cube/manager"
 	"github.com/araminian/cube/node"
 	"github.com/araminian/cube/task"
 	"github.com/araminian/cube/worker"
+	"github.com/docker/docker/client"
 	"github.com/golang-collections/collections/queue"
 	"github.com/google/uuid"
 )
@@ -60,4 +63,63 @@ func main() {
 	}
 
 	fmt.Printf("node :=> %+v\n", n)
+
+	fmt.Println("Creating container")
+	dockerTask, createResult := createContainer()
+
+	if createResult.Error != nil {
+		fmt.Printf("Error creating container: %v", createResult.Error)
+		os.Exit(1)
+	}
+
+	time.Sleep(10 * time.Second)
+
+	fmt.Printf("Stopping container %s with id %s", dockerTask.Config.Name, createResult.ContainerID)
+
+	stopResult := stopContainer(dockerTask, createResult.ContainerID)
+
+	if stopResult.Error != nil {
+		fmt.Printf("Error stopping container: %v", stopResult.Error)
+		os.Exit(1)
+	}
+}
+
+func createContainer() (*task.Docker, *task.DockerResult) {
+
+	c := task.Config{
+		Image: "nginx:latest",
+		Name:  "test",
+		Env:   []string{"ENV=test"},
+	}
+
+	dc, _ := client.NewClientWithOpts(client.FromEnv)
+
+	d := task.Docker{
+		Client: dc,
+		Config: c,
+	}
+
+	result := d.Run()
+
+	if result.Error != nil {
+		log.Printf("Error creating container: %v", result.Error)
+		return nil, nil
+	}
+
+	fmt.Printf("Container created: %s", result.ContainerID)
+
+	return &d, &result
+}
+
+func stopContainer(d *task.Docker, id string) *task.DockerResult {
+	result := d.Stop(id)
+
+	if result.Error != nil {
+		log.Printf("Error stopping container: %v", result.Error)
+		return nil
+	}
+
+	fmt.Printf("Container stopped and removed: %s", id)
+
+	return &result
 }
