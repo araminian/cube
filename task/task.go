@@ -26,9 +26,18 @@ const (
 	Completed
 )
 
+var StateTransitionMap = map[State][]State{
+	Pending:   {Scheduled},
+	Scheduled: {Scheduled, Running, Failed},
+	Running:   {Running, Completed, Failed},
+	Completed: {},
+	Failed:    {},
+}
+
 type Task struct {
 	ID            uuid.UUID
 	Name          string
+	ContainerID   string
 	State         State
 	Image         string
 	Memory        int
@@ -62,9 +71,31 @@ type Config struct {
 	RestartPolicy string
 }
 
+func NewConfig(t *Task) Config {
+	return Config{
+		Name:          t.Name,
+		Image:         t.Image,
+		Memory:        int64(t.Memory),
+		Disk:          int64(t.Disk),
+		RestartPolicy: t.RestartPolicy,
+		ExposedPorts:  t.ExposedPorts,
+	}
+}
+
 type Docker struct {
 	Client *client.Client
 	Config Config
+}
+
+func NewDocker(config Config) (Docker, error) {
+	dc, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return Docker{}, err
+	}
+	return Docker{
+		Client: dc,
+		Config: config,
+	}, nil
 }
 
 type DockerResult struct {
@@ -184,4 +215,21 @@ func (d *Docker) Stop(id string) DockerResult {
 		Result: "success",
 		Error:  nil,
 	}
+}
+
+func Contains(states []State, state State) bool {
+	for _, s := range states {
+		if s == state {
+			return true
+		}
+	}
+	return false
+}
+
+func ValidateStateTransition(from State, to State) bool {
+	validStates, ok := StateTransitionMap[from]
+	if !ok {
+		return false
+	}
+	return Contains(validStates, to)
 }
