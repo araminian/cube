@@ -21,34 +21,33 @@ func main() {
 		Db:    db,
 	}
 
-	tt := task.Task{
-		ID:    uuid.New(),
-		Name:  "test",
-		State: task.Scheduled,
-		Image: "nginx:latest",
+	host := "localhost"
+	port := 5555
+
+	api := worker.API{
+		Worker:  &w,
+		Address: host,
+		Port:    port,
 	}
 
-	fmt.Printf("task :=> %+v\n", tt)
-	w.AddTask(tt)
+	go runTasks(&w)
 
-	result := w.RunTask()
-	if result.Error != nil {
-		panic(result.Error)
+	api.Start()
+}
+
+func runTasks(w *worker.Worker) {
+	for {
+		if w.Queue.Len() > 0 {
+			result := w.RunTask()
+			if result.Error != nil {
+				log.Printf("Error running task: %v", result.Error)
+			}
+		} else {
+			log.Printf("No tasks to run on worker %s\n", w.Name)
+		}
+		log.Printf("Sleeping for 10 seconds\n")
+		time.Sleep(10 * time.Second)
 	}
-
-	tt.ContainerID = result.ContainerID
-	fmt.Printf("task %s with container id %s\n", tt.ID, tt.ContainerID)
-
-	fmt.Printf("Sleeping for 1min\n")
-	time.Sleep(1 * time.Minute)
-
-	tt.State = task.Completed
-	w.AddTask(tt)
-	result = w.RunTask()
-	if result.Error != nil {
-		panic(result.Error)
-	}
-
 }
 
 func createContainer() (*task.Docker, *task.DockerResult) {
@@ -90,3 +89,7 @@ func stopContainer(d *task.Docker, id string) *task.DockerResult {
 
 	return &result
 }
+
+// curl -X POST http://localhost:5555/tasks -d '{"ID":"123e4567-e89b-12d3-a456-426614174000","State":2,"TASK":{"ID":"123e4567-e89b-12d3-a456-426614174000","State":1,"Name":"test","Image":"nginx:latest"}}'
+// curl localhost:5555/tasks
+// curl -X DELETE localhost:5555/tasks/123e4567-e89b-12d3-a456-426614174000
