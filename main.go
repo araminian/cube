@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/araminian/cube/manager"
 	"github.com/araminian/cube/task"
 	"github.com/araminian/cube/worker"
 	"github.com/docker/docker/client"
@@ -32,7 +33,42 @@ func main() {
 
 	go runTasks(&w)
 	go w.CollectStats()
-	api.Start()
+	go api.Start()
+
+	workers := []string{fmt.Sprintf("%s:%d", host, port)}
+	m := manager.NewManager(workers)
+
+	for i := 0; i < 2; i++ {
+		t := task.Task{
+			ID:    uuid.New(),
+			Name:  fmt.Sprintf("test-%d", i),
+			Image: "nginx:latest",
+			State: task.Scheduled,
+		}
+		te := task.TaskEvent{
+			ID:    uuid.New(),
+			Task:  t,
+			State: task.Running,
+		}
+		m.AddTask(te)
+		m.SendWork()
+	}
+
+	go func() {
+		for {
+			fmt.Printf("Manager: Updating tasks from workers %v\n", m.Workers)
+			m.UpdateTasks()
+			time.Sleep(15 * time.Second)
+		}
+	}()
+
+	for {
+		log.Printf("Manager: TaskDB: %v\n", m.TaskDb)
+		for _, t := range m.TaskDb {
+			fmt.Printf("Manager Task : id: %s , state: %d\n", t.ID, t.State)
+		}
+		time.Sleep(10 * time.Second)
+	}
 }
 
 func runTasks(w *worker.Worker) {
