@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/araminian/cube/task"
 	"github.com/araminian/cube/worker"
@@ -55,7 +56,27 @@ func (m *Manager) SelectWorker() string {
 	return m.Workers[newWorker]
 }
 
+func (m *Manager) ProcessTasks() {
+	for {
+		log.Println("Manager: Processing tasks")
+		m.SendWork()
+		log.Println("Manager: Sleeping for 10 seconds")
+		time.Sleep(10 * time.Second)
+	}
+}
+
 func (m *Manager) UpdateTasks() {
+
+	for {
+		log.Println("Manager: Checking for tasks updates")
+		m.updateTasks()
+		log.Println("Manager: Sleeping for 15 seconds")
+		time.Sleep(15 * time.Second)
+	}
+
+}
+
+func (m *Manager) updateTasks() {
 	for _, worker := range m.Workers {
 		log.Printf("Manager: Checking worker %s for tasks updates", worker)
 		url := fmt.Sprintf("http://%s/tasks", worker)
@@ -160,4 +181,12 @@ func (m *Manager) SendWork() {
 
 func (m *Manager) AddTask(te task.TaskEvent) {
 	m.Pending.Enqueue(te)
+}
+
+func (m *Manager) GetTasks() []*task.Task {
+	tasks := []*task.Task{}
+	for _, t := range m.TaskDb {
+		tasks = append(tasks, t)
+	}
+	return tasks
 }

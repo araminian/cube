@@ -22,7 +22,22 @@ func (w *Worker) AddTask(t task.Task) {
 	w.Queue.Enqueue(t)
 }
 
-func (w *Worker) RunTask() task.DockerResult {
+func (w *Worker) RunTask() {
+	for {
+		if w.Queue.Len() > 0 {
+			result := w.runTask()
+			if result.Error != nil {
+				log.Printf("Error running task: %v", result.Error)
+			}
+		} else {
+			log.Printf("No tasks to run on worker %s\n", w.Name)
+		}
+		log.Printf("Sleeping for 10 seconds\n")
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func (w *Worker) runTask() task.DockerResult {
 	fromQ := w.Queue.Dequeue()
 
 	if fromQ == nil {
